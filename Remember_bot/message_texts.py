@@ -14,3 +14,7 @@ HELP = """
 По любым вопросам и предложениям пишите на почту nickita.bogdanow@yandex.ru.
 Ссылка на GitHub проекта: https://github.com/nickitabogdanow/Remember_bot
 """
+
+REMEMBER = """
+Введите сообщение, которое нужно запомнить.
+"""

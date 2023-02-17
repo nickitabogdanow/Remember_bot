@@ -1,21 +1,34 @@
+import asyncio
 import os
 import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-from message_texts import GREETING, HELP, REMEMBER
 import sqlite3
 import datetime
 
 
-conn = sqlite3.connect('users.db')
+from telegram import Update, InputTextMessageContent, InlineQueryResultArticle
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, InlineQueryHandler
+
+from message_texts import GREETING, HELP, REMEMBER, REMEMBER_PROCESS
+
+
+conn = sqlite3.connect('db.sql')
 cur = conn.cursor()
 with conn:
     cur.execute('''
-    CREATE TABLE IF NOT EXISTS bot_users (
-        id integer primary key AUTOINCREMENT,
-        created_at TIMESTAMP default current_timestamp not null,
-        telegram_id bigint UNIQUE not null
-    );
+CREATE TABLE IF NOT EXISTS bot_users (
+    id integer primary key,
+    created_at TIMESTAMP default current_timestamp not null,
+    telegram_id bigint UNIQUE not null
+);
+''')
+    cur.execute('''
+CREATE TABLE IF NOT EXISTS messages (
+    id integer primary key,
+    telegram_id bigint UNIQUE not null,
+    created_at TIMESTAMP default current_timestamp not null,
+    message VARCHAR UNIQUE,
+    FOREIGN KEY(id) REFERENCES bot_user(id)
+);
     ''')
 
 
@@ -36,17 +49,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         VALUES(?, ?);''', user)
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=GREETING)
+    await asyncio.sleep(0.3)
 
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=HELP)
+    await asyncio.sleep(0.3)
 
 
 async def remember(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=REMEMBER)
+    await asyncio.sleep(0.3)
 
 
-async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def remember_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=REMEMBER_PROCESS)
+    message = update.message.text
+    telegram_id = update.effective_user.id
+    created_at = datetime.datetime.now()
+    user_message = (telegram_id, created_at, message)
+    print(user_message)
+    with conn:
+        cur.execute('''INSERT OR IGNORE INTO messages (telegram_id, created_at, message)
+        VALUES(?, ?, ?);''', user_message)
+    await asyncio.sleep(0.3)
+
+
+async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
 
@@ -62,7 +91,10 @@ if __name__ == '__main__':
     remember_handler = CommandHandler('remember', remember)
     application.add_handler(remember_handler)
 
-    unknown_handler = MessageHandler(filters.COMMAND, unknown)
-    application.add_handler(unknown_handler)
+    remember_process_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), remember_process)
+    application.add_handler(remember_process_handler)
+
+    unknown_command_handler = MessageHandler(filters.COMMAND, unknown_command)
+    application.add_handler(unknown_command_handler)
 
     application.run_polling()

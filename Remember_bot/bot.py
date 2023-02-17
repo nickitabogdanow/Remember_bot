@@ -5,10 +5,10 @@ import sqlite3
 import datetime
 
 
-from telegram import Update, InputTextMessageContent, InlineQueryResultArticle
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, InlineQueryHandler
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
-from message_texts import GREETING, HELP, REMEMBER, REMEMBER_PROCESS
+from message_texts import GREETING, HELP, REMEMBER, REMEMBER_PROCESS, LIST_OF_MESSAGES
 
 
 conn = sqlite3.connect('db.sql')
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS messages (
     telegram_id bigint UNIQUE not null,
     created_at TIMESTAMP default current_timestamp not null,
     message VARCHAR UNIQUE,
-    FOREIGN KEY(id) REFERENCES bot_user(id)
+    FOREIGN KEY(id) REFERENCES bot_user(id) on DELETE CASCADE
 );
     ''')
 
@@ -68,10 +68,17 @@ async def remember_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     created_at = datetime.datetime.now()
     user_message = (telegram_id, created_at, message)
-    print(user_message)
     with conn:
         cur.execute('''INSERT OR IGNORE INTO messages (telegram_id, created_at, message)
         VALUES(?, ?, ?);''', user_message)
+    await asyncio.sleep(0.3)
+
+
+async def list_of_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=LIST_OF_MESSAGES)
+    with conn:
+        cur.execute('''SELECT message FROM messages WHERE telegram_id = ?;''', (update.effective_user.id,))пше
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=cur.fetchall()[0][0])
     await asyncio.sleep(0.3)
 
 
@@ -93,6 +100,9 @@ if __name__ == '__main__':
 
     remember_process_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), remember_process)
     application.add_handler(remember_process_handler)
+
+    list_of_messages_handler = CommandHandler('list_of_messages', list_of_messages)
+    application.add_handler(list_of_messages_handler)
 
     unknown_command_handler = MessageHandler(filters.COMMAND, unknown_command)
     application.add_handler(unknown_command_handler)
